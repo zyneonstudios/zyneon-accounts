@@ -63,6 +63,13 @@
         </resources>
     </build>
 
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <url>https://maven.pkg.github.com/officialPlocki/ZyneonAccounts</url>
+        </repository>
+    </distributionManagement>
+
     <dependencies>
         <dependency>
             <groupId>io.undertow</groupId>
