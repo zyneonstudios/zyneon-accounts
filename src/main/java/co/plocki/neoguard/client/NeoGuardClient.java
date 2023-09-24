@@ -72,7 +72,7 @@ public class NeoGuardClient {
         HttpsURLConnection.setDefaultHostnameVerifier(new TrustAllHostnameVerifier());
 
         SERVER_URL = jsonFile.get("settings").getString("server_url");
-        //PASSPHRASE = jsonFile.get("settings").getString("passphrase");
+        PASSPHRASE = jsonFile.get("settings").getString("passphrase");
         ssl = jsonFile.get("settings").getBoolean("ssl");
 
         SESSION_KEY = connectAndAuthenticate();
