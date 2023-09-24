@@ -36,7 +36,6 @@ public class AccountSystem {
     private Undertow undertow;
 
     private static final AccountManager accountManager = new AccountManager();
-    private static final AuthenticationToken tokenManager = new AuthenticationToken();
 
     public void start() throws IOException, NoSuchAlgorithmException, KeyManagementException {
         // Initialize NeoGuardClient and set up Undertow routes
@@ -50,10 +49,8 @@ public class AccountSystem {
                             .post("/logout", this::logoutHandler)
                             .post("/refresh", this::refreshTokenHandler)
                             .get("/api/application", this::applicationApiHandler)
-                            .delete("/account/{username}", this::deleteAccountHandler)
-                            .post("/account", this::createAccountHandler)
-                            .get("/information", this::getAllInformationHandler)
-                            .post("/account/updateData", this::changeUserDataHandler)).build();
+                            .get("/account", this::accountHandler)
+                            .get("/information", this::getAllInformationHandler)).build();
         }
 
         undertow.start();
@@ -118,10 +115,10 @@ public class AccountSystem {
                     // Continue with token validation and deletion
                     handleLogout(exchange, authTokenRef.get());
                 } else {
-                    respondWithError(exchange, "Invalid request format: authToken missing", 400);
+                    respondWithError(exchange, "Invalid request format: authToken missing", 401);
                 }
             } catch (JSONException e) {
-                respondWithError(exchange, "Invalid request format: JSON parsing error", 400);
+                respondWithError(exchange, "Invalid request format: JSON parsing error", 401);
             }
         });
     }
@@ -247,43 +244,39 @@ public class AccountSystem {
                 JSONObject responseJson = new JSONObject();
 
                 switch (action) {
-                    case "viewUserData":
+                    case "viewUserData" -> {
                         String usernameToView = requestData.getString("username");
                         JSONObject userData = isAdminToken ? getAdminViewUserData(usernameToView) : getUserData(usernameToView, token);
                         responseJson.put("data", userData);
-                        break;
-
-                    case "modifyUserData":
+                    }
+                    case "modifyUserData" -> {
                         String usernameToModify = requestData.getString("username");
                         String dataKey = requestData.getString("dataKey");
                         JSONObject modifiedData = requestData.getJSONObject("modifiedData");
-
-                        boolean b = false;
-
-                        if(isAdminToken) {
-                            b = modifyUserData(usernameToModify, dataKey, modifiedData);
-                        }
-
-                        boolean modificationResult = b;
+                        boolean modificationResult = isAdminToken && modifyUserData(usernameToModify, dataKey, modifiedData);
                         responseJson.put("success", modificationResult);
-                        break;
-
-                    case "deleteAccount":
+                    }
+                    case "deleteAccount" -> {
                         String accountToDelete = requestData.getString("username");
-
-                        boolean b1 = false;
-
-                        if(isAdminToken) {
-                            b1 = deleteAccount(accountToDelete);
-                        }
-
-                        boolean deletionResult = b1;
+                        boolean deletionResult = isAdminToken && deleteAccount(accountToDelete);
                         responseJson.put("success", deletionResult);
-                        break;
-
-                    default:
-                        respondWithError(exchange, "Unknown action", 400);
+                    }
+                    case "changePassword" -> {
+                        String usernameToChangePassword = requestData.getString("username");
+                        String newPassword = requestData.getString("newPassword");
+                        boolean passwordChangeResult = isAdminToken && changeUserPassword(usernameToChangePassword, newPassword);
+                        responseJson.put("success", passwordChangeResult);
+                    }
+                    case "changeUsername" -> {
+                        String usernameToChange = requestData.getString("username");
+                        String newUsername = requestData.getString("newUsername");
+                        boolean usernameChangeResult = isAdminToken && changeUsername(usernameToChange, newUsername);
+                        responseJson.put("success", usernameChangeResult);
+                    }
+                    default -> {
+                        respondWithError(exchange, "Unknown action", 401);
                         return;
+                    }
                 }
 
                 respondWithJson(exchange, responseJson);
@@ -295,6 +288,14 @@ public class AccountSystem {
         } else {
             respondWithError(exchange, "Invalid application token", 401);
         }
+    }
+
+    private boolean changeUserPassword(String username, String newPassword) throws Exception {
+        return accountManager.updatePassword(username, newPassword);
+    }
+
+    private boolean changeUsername(String username, String newUsername) throws Exception {
+        return accountManager.changeUsername(username, newUsername);
     }
 
     private void respondWithError(HttpServerExchange exchange, String errorMessage, int statusCode) {
@@ -309,10 +310,11 @@ public class AccountSystem {
         exchange.getResponseSender().send(jsonResponse.toString());
     }
 
-    private static boolean deleteAccount(String username) {
+    private boolean deleteAccount(String username) {
         try {
             // Delete the account and associated data
             accountManager.deleteAccount(username);
+
             return true;
         } catch (Exception e) {
             e.printStackTrace();
@@ -353,64 +355,128 @@ public class AccountSystem {
         return token.get();  // Return null if the token is not found in the request body
     }
 
-    private void deleteAccountHandler(HttpServerExchange exchange) {
-        // Extract the request body to get the username to delete
+    // Modified deleteAccountHandler to handle deletion and data modification
+    private void accountHandler(HttpServerExchange exchange) {
+        // Extract the authentication token from the request headers
+
         String requestBody = extractRequestBody(exchange);
         JSONObject requestData = new JSONObject(requestBody);
-        String usernameToDelete = requestData.getString("username");
 
-        AuthenticationToken token = AuthenticationToken.getAuthenticationToken(extractAuthTokenFromRequest(exchange));
+        try {
+            // Retrieve the authentication token based on the provided authToken
 
-        // Check if the token has permission to delete the specified account
-        assert token != null;
-        if (token.getUsername().equals(usernameToDelete)) {
-            try {
-                // Attempt to delete the account
-                boolean deletionSuccess = deleteAccount(usernameToDelete);
+            // Check if the token is authorized for the action
+            String action = requestData.optString("action", "");
+            JSONObject actionData = requestData.optJSONObject("data");
 
-                // Prepare the response JSON
-                JSONObject responseJson = new JSONObject();
-                responseJson.put("success", deletionSuccess);
+            JSONObject responseJson = new JSONObject();
 
-                // Respond with the result
-                respondWithJson(exchange, responseJson);
-                return;
-            } catch (Exception e) {
-                // Handle exceptions appropriately (e.g., send an error response)
-                e.printStackTrace();
+            switch (action) {
+                case "createAccount":
+
+                    if (requestData.has("username") && requestData.has("password")) {
+                        try {
+                            String username = requestData.getString("username");
+                            String password = requestData.getString("password");
+
+                            // Call the AccountManager's createAccount method
+                            accountManager.createAccount(username, password);
+
+                            // Prepare a success response
+                            responseJson.put("success", true);
+
+                            // Respond with the success response
+                            respondWithJson(exchange, responseJson);
+                            return;
+                        } catch (Exception e) {
+                            // Handle exceptions appropriately (e.g., send an error response)
+                            e.printStackTrace();
+                        }
+                    } else {
+                        respondWithError(exchange, "Invalid body", 401);
+                    }
+                case "deleteAccount":
+                    String authToken = extractAuthTokenFromRequest(exchange);
+                    AuthenticationToken token = AuthenticationToken.getAuthenticationToken(authToken);
+                    assert token != null;
+                    if (token.getUsername().equalsIgnoreCase(actionData.optString("username", ""))) {
+                        String usernameToDelete = actionData.optString("username", "");
+                        boolean deletionResult = deleteAccount(usernameToDelete);
+                        responseJson.put("success", deletionResult);
+                    } else {
+                        respondWithError(exchange, "Unauthorized action", 401);
+                        return;
+                    }
+                    break;
+
+                case "updateUserData":
+                    String authToken2 = extractAuthTokenFromRequest(exchange);
+                    AuthenticationToken token2 = AuthenticationToken.getAuthenticationToken(authToken2);
+                    assert token2 != null;
+                    if (token2.getUsername().equalsIgnoreCase(actionData.optString("username", ""))) {
+                        String usernameToUpdate = actionData.optString("username", "");
+                        String dataKey = actionData.optString("dataKey", "");
+                        JSONObject modifiedData = actionData.optJSONObject("modifiedData");
+                        boolean modificationResult = modifyUserData(usernameToUpdate, dataKey, modifiedData);
+                        responseJson.put("success", modificationResult);
+                    } else {
+                        respondWithError(exchange, "Unauthorized action", 401);
+                        return;
+                    }
+                    break;
+                case "getUserData":
+                    String authToken3 = extractAuthTokenFromRequest(exchange);
+                    AuthenticationToken token3 = AuthenticationToken.getAuthenticationToken(authToken3);
+                    assert token3 != null;
+                    if (token3.getUsername().equalsIgnoreCase(actionData.optString("username", ""))) {
+                        String usernameToRetrieve = actionData.optString("username", "");
+                        String dataKey = actionData.optString("dataKey", "*");
+                        JSONObject userData = accountManager.getUserData(usernameToRetrieve, dataKey);
+                        responseJson.put("userData", userData);
+                    } else {
+                        respondWithError(exchange, "Unauthorized action", 401);
+                        return;
+                    }
+                    break;
+                case "changePassword":
+                    String authToken5 = extractAuthTokenFromRequest(exchange);
+                    AuthenticationToken token5 = AuthenticationToken.getAuthenticationToken(authToken5);
+                    assert token5 != null;
+                    if (token5.getUsername().equalsIgnoreCase(actionData.optString("username", ""))) {
+                        String usernameToUpdate = actionData.optString("username", "");
+                        String newPassword = actionData.optString("newPassword", "");
+                        boolean passwordChangeResult = accountManager.updatePassword(usernameToUpdate, newPassword);
+                        responseJson.put("success", passwordChangeResult);
+                    } else {
+                        respondWithError(exchange, "Unauthorized action", 401);
+                        return;
+                    }
+                    break;
+
+                case "changeUsername":
+                    String authToken4 = extractAuthTokenFromRequest(exchange);
+                    AuthenticationToken token4 = AuthenticationToken.getAuthenticationToken(authToken4);
+                    assert token4 != null;
+                    if (token4.getUsername().equalsIgnoreCase(actionData.optString("username", ""))) {
+                        String usernameToUpdate = actionData.optString("username", "");
+                        String newUsername = actionData.optString("newUsername", "");
+                        boolean usernameChangeResult = accountManager.changeUsername(usernameToUpdate, newUsername);
+                        responseJson.put("success", usernameChangeResult);
+                    } else {
+                        respondWithError(exchange, "Unauthorized action", 401);
+                        return;
+                    }
+                    break;
+                default:
+                    respondWithError(exchange, "Unknown action", 401);
+                    return;
             }
-        } else {
-            respondWithError(exchange, "Token isn't admin token", 400);
-        }
-    }
 
-
-
-    private void createAccountHandler(HttpServerExchange exchange) {
-        // Extract the request body to get account information
-        JSONObject requestBodyJson = new JSONObject(extractRequestBody(exchange));
-
-        if (requestBodyJson.has("username") && requestBodyJson.has("password")) {
-            try {
-                String username = requestBodyJson.getString("username");
-                String password = requestBodyJson.getString("password");
-
-                // Call the AccountManager's createAccount method
-                accountManager.createAccount(username, password);
-
-                // Prepare a success response
-                JSONObject responseJson = new JSONObject();
-                responseJson.put("success", true);
-
-                // Respond with the success response
-                respondWithJson(exchange, responseJson);
-                return;
-            } catch (Exception e) {
-                // Handle exceptions appropriately (e.g., send an error response)
-                e.printStackTrace();
-            }
-        } else {
-            respondWithError(exchange, "Invalid body", 400);
+            // Respond with the result
+            respondWithJson(exchange, responseJson);
+        } catch (Exception e) {
+            respondWithError(exchange, "Internal server error", 500);
+            logger.error("Exception in deleteAccountHandler: " + e.getMessage());
         }
     }
 
@@ -429,7 +495,7 @@ public class AccountSystem {
                     // Extract the username of the user whose information is requested
                     String requestedUsername = null;
                     JSONObject requestBodyJson = new JSONObject(extractRequestBody(exchange));
-                    if (requestBodyJson != null && requestBodyJson.has("username")) {
+                    if (requestBodyJson.has("username")) {
                         requestedUsername = requestBodyJson.getString("username");
                     }
 
@@ -445,7 +511,7 @@ public class AccountSystem {
                         String decodedPassword = decodeBase64Password(userAccount.getPassword());
                         responseJson.put("password", maskPassword(decodedPassword));
 
-                        // Add other user account information as needed
+                        responseJson.put("data", getUserData(userAccount.getUsername(), token));
                     }
 
                     // Respond with the information
@@ -462,63 +528,13 @@ public class AccountSystem {
         respondWithError(exchange, "Token isn't admin token", 401);
     }
 
-    private void changeUserDataHandler(HttpServerExchange exchange) {
-        // Extract the authentication token from the request headers or query parameters
-        String authToken = extractAuthTokenFromRequest(exchange);
-
-        if (authToken != null) {
-            // Extract the request body to get user data modifications
-            String requestBody = extractRequestBody(exchange);
-            JSONObject requestData = new JSONObject(requestBody);
-
-            try {
-                // Retrieve the authentication token based on the provided authToken
-                AuthenticationToken token = AuthenticationToken.getAuthenticationToken(authToken);
-
-                if (token != null) {
-                    // Check if the token is authorized to modify user data for the given username
-                    if (token.getUsername().equals(requestData.getString("username"))) {
-                        String usernameToModify = requestData.getString("username");
-                        String dataKey = requestData.getString("dataKey");
-                        JSONObject modifiedData = requestData.getJSONObject("modifiedData");
-
-                        boolean modificationResult = modifyUserData(usernameToModify, dataKey, modifiedData);
-
-                        // Prepare the response JSON
-                        JSONObject responseJson = new JSONObject();
-                        responseJson.put("success", modificationResult);
-
-                        // Respond with the result
-                        respondWithJson(exchange, responseJson);
-                        return;
-                    } else {
-                        respondWithError(exchange, "Unauthorized to modify user data", 401);
-                    }
-                } else {
-                    respondWithError(exchange, "Invalid authentication token", 401);
-                }
-            } catch (Exception e) {
-                respondWithError(exchange, "Internal server error", 500);
-                logger.error("Exception in changeUserDataHandler: " + e.getMessage());
-            }
-        } else {
-            respondWithError(exchange, "Invalid or missing authentication token", 401);
-        }
-    }
-
-
     private static String decodeBase64Password(String base64Password) {
         byte[] decodedBytes = Base64.getDecoder().decode(base64Password);
         return new String(decodedBytes, StandardCharsets.UTF_8);
     }
 
     private static String maskPassword(String password) {
-        StringBuilder maskedPassword = new StringBuilder();
-        for (int i = 0; i < password.length(); i++) {
-            maskedPassword.append('*');
-        }
-        return maskedPassword.toString();
+        return "*".repeat(password.length());
     }
-
 
 }

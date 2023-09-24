@@ -19,7 +19,7 @@ public class AccountManager {
 
         JSONObject obj = new JSONObject();
         obj.put("username", username);
-        obj.put("password", new String(Base64.getEncoder().encode(password.getBytes(StandardCharsets.UTF_8))));
+        obj.put("password", password);
         obj.put("creation_timestamp", System.currentTimeMillis());
         obj.put("uuid", UUID.randomUUID().toString());
 
@@ -211,6 +211,27 @@ public class AccountManager {
                     return post.post();
                 }
             }
+        }
+
+        return false;
+    }
+
+    public boolean updatePassword(String username, String newPassword) throws Exception {
+        NeoThread accounts = new NeoThread("accounts");
+        NeoArray userArray = new NeoArray(username);
+
+        NeoRequest request = new NeoRequest(accounts, List.of(userArray));
+        NeoResponse response = request.request();
+
+        List<Object> objects = response.getArrayObjects(userArray);
+
+        if (!objects.isEmpty()) {
+            JSONObject jsonObject = (JSONObject) objects.get(0);
+
+            jsonObject.put("password", newPassword);
+
+            NeoPost post = new NeoPost(accounts, List.of(userArray), List.of(jsonObject));
+            post.post();
         }
 
         return false;
