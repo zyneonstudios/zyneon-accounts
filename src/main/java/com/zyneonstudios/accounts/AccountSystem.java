@@ -44,7 +44,7 @@ public class AccountSystem {
 
         if (undertow == null) {
             undertow = Undertow.builder()
-                    .setHandler(new RoutingHandler()
+                    .addHttpListener(908, "0.0.0.0", new RoutingHandler()
                             .post("/login", this::loginHandler)
                             .post("/logout", this::logoutHandler)
                             .post("/refresh", this::refreshTokenHandler)
