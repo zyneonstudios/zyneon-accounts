@@ -1,6 +1,8 @@
 package co.plocki.neoguard.client.interfaces;
 
 import co.plocki.neoguard.client.NeoGuardClient;
+import com.zyneonstudios.accounts.AccountSystem;
+import org.apache.logging.log4j.Level;
 import org.json.JSONObject;
 
 public class NeoRow {
@@ -35,8 +37,10 @@ public class NeoRow {
         return resp.getJSONObject("data").getJSONObject("encryptedData").getJSONObject("response").getString("status-code").equalsIgnoreCase("SUCCEED");
     }
 
-    private void debug(String message) {
-        //System.out.println("Debug [" + NeoGuardClient.class.getSimpleName() + "]: " + message);
+    private static void debug(String message) {
+        if(AccountSystem.debug) {
+            AccountSystem.logger.log(Level.DEBUG, "Debug [" + NeoGuardClient.class.getSimpleName() + "]: " + message);
+        }
     }
 
 }

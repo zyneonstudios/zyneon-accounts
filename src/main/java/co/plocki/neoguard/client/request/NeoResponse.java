@@ -11,7 +11,7 @@ import java.util.Objects;
 
 public class NeoResponse {
 
-    private HashMap<NeoArray, List<Object>> data;
+    private final HashMap<NeoArray, List<Object>> data;
 
     public NeoResponse(JSONObject dat) {
         data = new HashMap<>();

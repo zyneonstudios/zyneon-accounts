@@ -38,6 +38,8 @@ public class AccountSystem {
 
     private static int MAX_JSON_OBJECTS = 6;
 
+    public static boolean debug = false;
+
     private void setTimeStamp(String username) {
         if(!accessCounts.containsKey(username)) {
             accessCounts.put(username, new AtomicLong(System.currentTimeMillis()));
@@ -67,7 +69,7 @@ public class AccountSystem {
         return jsonSizeBytes <= MAX_JSON_SIZE_BYTES;
     }
 
-    private static final Logger logger = LogManager.getLogger(AccountSystem.class);
+    public static final Logger logger = LogManager.getLogger(AccountSystem.class);
 
     public static void main(String[] args) throws IOException, NoSuchAlgorithmException, KeyManagementException {
 
@@ -96,7 +98,7 @@ public class AccountSystem {
                     "  <->"
             };
 
-            for (int i = 0; i < 10; i++) {
+            for (int i = 0; i < 12; i++) {
                 System.out.print("\r" + cuteLoadingFrames[i % cuteLoadingFrames.length]);
                 try {
                     Thread.sleep(500);
@@ -164,12 +166,14 @@ public class AccountSystem {
         file.putDefaultObject("json_data_max_bytes", 1024);
         file.putDefaultObject("token_random_byte_size", 256);
         file.putDefaultObject("json_data_max_objects", 6);
+        file.putDefaultObject("debug_enabled", false);
         file.save();
 
         MAX_ACCESS_PER_MINUTE = file.getInt("max_access_per_minute");
         MAX_JSON_SIZE_BYTES = file.getInt("json_data_max_bytes");
         TOKEN_RANDOM_BYTE_SIZE = file.getInt("token_random_byte_size");
         MAX_JSON_OBJECTS = file.getInt("json_data_max_objects");
+        debug = file.getBoolean("debug_enabled");
 
         if (undertow == null) {
             undertow = Undertow.builder()

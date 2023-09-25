@@ -1,6 +1,8 @@
 package co.plocki.neoguard.client.interfaces;
 
 import co.plocki.neoguard.client.NeoGuardClient;
+import com.zyneonstudios.accounts.AccountSystem;
+import org.apache.logging.log4j.Level;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
@@ -54,8 +56,10 @@ public class NeoArray {
         return new ArrayList<>();
     }
 
-    private void debug(String message) {
-        //System.out.println("Debug [" + NeoGuardClient.class.getSimpleName() + "]: " + message);
+    private static void debug(String message) {
+        if(AccountSystem.debug) {
+            AccountSystem.logger.log(Level.DEBUG, "Debug [" + NeoGuardClient.class.getSimpleName() + "]: " + message);
+        }
     }
 
 }

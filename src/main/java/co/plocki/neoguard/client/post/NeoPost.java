@@ -3,6 +3,8 @@ package co.plocki.neoguard.client.post;
 import co.plocki.neoguard.client.NeoGuardClient;
 import co.plocki.neoguard.client.interfaces.NeoArray;
 import co.plocki.neoguard.client.interfaces.NeoThread;
+import com.zyneonstudios.accounts.AccountSystem;
+import org.apache.logging.log4j.Level;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -56,6 +58,8 @@ public class NeoPost {
     }
 
     private static void debug(String message) {
-        //System.out.println("Debug [" + NeoGuardClient.class.getSimpleName() + "]: " + message);
+        if(AccountSystem.debug) {
+            AccountSystem.logger.log(Level.DEBUG, "Debug [" + NeoGuardClient.class.getSimpleName() + "]: " + message);
+        }
     }
 }
