@@ -93,8 +93,6 @@ public class NeoGuardClient {
 
         JSONObject responseObj = sendRequestSync(requestObj, true);
 
-        System.out.println(responseObj);
-
         return responseObj.getJSONObject("data").getString("key");
     }
 

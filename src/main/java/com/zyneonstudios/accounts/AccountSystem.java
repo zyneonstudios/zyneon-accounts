@@ -99,6 +99,13 @@ public class AccountSystem {
                     Thread.sleep(500);
                 } catch (InterruptedException ignored) {}
             }
+
+            System.out.println("\nLoaded!\n");
+
+            System.out.println("Command list:");
+            System.out.println("createAdminAppToken username");
+            System.out.println("createAppToken username");
+            System.out.println("stop");
         });
         thread.start();
 
@@ -107,18 +114,8 @@ public class AccountSystem {
 
         Runtime.getRuntime().addShutdownHook(new Thread(accountSystem::stop));
 
-        if(thread.isAlive()) {
-            thread.interrupt();
-        }
-
-        System.out.println("\nLoaded!\n");
 
         Scanner scanner = new Scanner(System.in);
-
-        System.out.println("Command list:");
-        System.out.println("createAdminAppToken username");
-        System.out.println("createAppToken username");
-        System.out.println("stop");
 
         while (true) {
             if (scanner.hasNextLine()) {
