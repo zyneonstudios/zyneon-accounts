@@ -15,6 +15,7 @@ import org.apache.logging.log4j.Logger;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyManagementException;
@@ -76,11 +77,11 @@ public class AccountSystem {
         NeoGuardClient client = new NeoGuardClient();
         client.start();
 
-        JSONFile file = new JSONFile("zyneon_config.json");
+        JSONFile file = new JSONFile("config" + File.separator + "zyneon_config.json");
         if(file.isNew()) {
             file.put("port", 908);
             file.put("host_IPv4", "0.0.0.0");
-            file.put("host_IPv4", "::");
+            file.put("host_IPv6", "::");
             file.put("max_access_per_minute", 100);
             file.put("json_data_max_bytes", 1024);
             file.put("token_random_byte_size", 256);
