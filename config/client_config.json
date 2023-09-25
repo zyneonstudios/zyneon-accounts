@@ -1,0 +1,8 @@
+{
+  "settings":{
+    "passphrase":"YOUR_PASSPHRASE",
+    "server_url":"http://localhost:5551/json-transfer",
+    "ssl":false
+  },
+  "mapperVersion":"1.0"
+}
