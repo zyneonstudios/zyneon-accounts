@@ -20,9 +20,41 @@ import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class AccountSystem {
+
+    private static final ConcurrentHashMap<String, AtomicLong> accessCounts = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, Integer> accesses = new ConcurrentHashMap<>();
+    private static final int MAX_ACCESS_PER_MINUTE = 100;
+    private static final int MAX_JSON_SIZE_BYTES = 1024;
+
+    private void setTimeStamp(String username) {
+        if(!accessCounts.containsKey(username)) {
+            accessCounts.put(username, new AtomicLong(System.currentTimeMillis()));
+        }
+    }
+
+    private boolean validateAccessRate(String username) {
+        setTimeStamp(username);
+
+        if(accesses.get(username) >= MAX_ACCESS_PER_MINUTE) {
+            return false;
+        }
+
+        accesses.put(username, accesses.get(username)+1);
+
+        return true;
+    }
+
+    private boolean validateJsonSize(String jsonString) {
+        int jsonSizeBytes = jsonString.getBytes(StandardCharsets.UTF_8).length;
+
+        return jsonSizeBytes <= MAX_JSON_SIZE_BYTES;
+    }
 
     private static final Logger logger = LogManager.getLogger(AccountSystem.class);
 
@@ -50,8 +82,33 @@ public class AccountSystem {
                             .post("/refresh", this::refreshTokenHandler)
                             .get("/api/application", this::applicationApiHandler)
                             .get("/account", this::accountHandler)
+                            .get("/information", this::getAllInformationHandler))
+
+                    .addHttpListener(908, "::", new RoutingHandler()
+                            .post("/login", this::loginHandler)
+                            .post("/logout", this::logoutHandler)
+                            .post("/refresh", this::refreshTokenHandler)
+                            .get("/api/application", this::applicationApiHandler)
+                            .get("/account", this::accountHandler)
                             .get("/information", this::getAllInformationHandler)).build();
         }
+
+        Thread thread = new Thread(() -> {
+            while (true) {
+                accessCounts.forEach((s, atomicLong) -> {
+                    if((System.currentTimeMillis() - atomicLong.get()) > 3600000) {
+                        accesses.remove(s);
+                        accessCounts.put(s, new AtomicLong(System.currentTimeMillis()));
+                    }
+                });
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException ignored) {}
+            }
+        });
+        thread.start();
+
+        Runtime.getRuntime().addShutdownHook(new Thread(thread::interrupt));
 
         undertow.start();
     }
@@ -76,7 +133,14 @@ public class AccountSystem {
         exchange.getRequestReceiver().receiveFullString((httpServerExchange, requestBody) -> {
             try {
                 JSONObject requestJson = new JSONObject(requestBody);
+
                 String username = requestJson.getString("username");
+
+                if(!validateAccessRate(username)) {
+                    respondWithError(exchange, "Exceed of rate limit", 401);
+                    return;
+                }
+
                 String password = requestJson.getString("password");
                 boolean requestNonExpiringToken = requestJson.optBoolean("nonExpiringToken", false);
 
@@ -91,6 +155,7 @@ public class AccountSystem {
                     // Respond with the authentication token
                     JSONObject responseJson = new JSONObject();
                     responseJson.put("authToken", authToken.getTokenValue());
+                    responseJson.put("uuid", account.getUuid());
                     respondWithJson(exchange, responseJson);
                 } else {
                     respondWithError(exchange, "Invalid credentials", 401);
@@ -103,6 +168,15 @@ public class AccountSystem {
         });
     }
 
+    private boolean checkExpirationAuthToken(String token) throws Exception {
+        if(Objects.requireNonNull(AuthenticationToken.getAuthenticationToken(token)).isTemporary()) {
+            if((System.currentTimeMillis() - Objects.requireNonNull(AuthenticationToken.getAuthenticationToken(token)).getCreationTimestamp()) > 300000) {
+                Objects.requireNonNull(AuthenticationToken.getAuthenticationToken(token)).deleteToken();
+                return false;
+            }
+        }
+        return true;
+    }
 
     private void logoutHandler(HttpServerExchange exchange) {
         // Extract the authentication token from the request body
@@ -112,6 +186,12 @@ public class AccountSystem {
                 JSONObject requestJson = new JSONObject(requestBody);
                 if (requestJson.has("authToken")) {
                     authTokenRef.set(requestJson.getString("authToken"));
+
+                    if(!checkExpirationAuthToken(authTokenRef.get())) {
+                        respondWithError(exchange, "Token invalid", 401);
+                        return;
+                    }
+
                     // Continue with token validation and deletion
                     handleLogout(exchange, authTokenRef.get());
                 } else {
@@ -119,6 +199,8 @@ public class AccountSystem {
                 }
             } catch (JSONException e) {
                 respondWithError(exchange, "Invalid request format: JSON parsing error", 401);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
             }
         });
     }
@@ -158,13 +240,23 @@ public class AccountSystem {
                 AuthenticationToken token = AuthenticationToken.getAuthenticationToken(authToken);
 
                 if (token != null) {
+                    if(token.isTemporary()) {
+                       if((System.currentTimeMillis() - token.getCreationTimestamp()) > 86400000) {
+                           token.deleteToken();
+                           respondWithError(exchange, "Token exceeded refresh time", 401);;
+                           return;
+                       }
+                    }
                     // Generate a new token with the same username and a new token value
                     AuthenticationToken newToken = new AuthenticationToken(token.getUsername(), generateNewToken(), token.isTemporary());
                     newToken.saveToken();
+                    token.deleteToken();
 
                     // Respond with the new authentication token
                     JSONObject responseJson = new JSONObject();
                     responseJson.put("authToken", newToken.getTokenValue());
+                    responseJson.put("uuid", accountManager.getAccount(token.getUsername()));
+                    responseJson.put("username", token.getUsername());
                     respondWithJson(exchange, responseJson);
                     return;
                 }
@@ -212,7 +304,13 @@ public class AccountSystem {
         }
     }
 
-    private static JSONObject getUserData(String username, Token token) {
+    private static JSONObject getUserData(String username, Token token) throws Exception {
+
+        if(accountManager.getAccount(token.getUsername()) == null) {
+            token.deleteToken();
+            return new JSONObject();
+        }
+
         try {
             // Check if the token is authorized to access the data for the given username
             if (token.isAdminToken() || token.getUsername().equals(username)) {
@@ -227,14 +325,19 @@ public class AccountSystem {
         }
     }
 
-    private void applicationApiHandler(HttpServerExchange exchange) {
+    private void applicationApiHandler(HttpServerExchange exchange) throws Exception {
         String applicationToken = extractApplicationTokenFromRequest(exchange);
 
         if (applicationToken != null) {
             Token token = Token.getApplicationToken(applicationToken);
 
+            assert token != null;
+            if(accountManager.getAccount(token.getUsername()) == null) {
+                token.deleteToken();
+                respondWithError(exchange, "Token expired", 401);
+            }
+
             try {
-                assert token != null;
                 boolean isAdminToken = token.isAdminToken();
 
                 String requestBody = extractRequestBody(exchange);
@@ -322,7 +425,7 @@ public class AccountSystem {
         }
     }
 
-    private static boolean modifyUserData(String username, String key,  JSONObject modifiedData) {
+    private static boolean modifyUserData(String username, String key, JSONObject modifiedData) {
         try {
             // Modify user data
             return accountManager.updateUserData(username, key, modifiedData);
@@ -377,6 +480,17 @@ public class AccountSystem {
                     if (requestData.has("username") && requestData.has("password")) {
                         try {
                             String username = requestData.getString("username");
+
+                            if(accountManager.getAccount(username) != null) {
+                                respondWithError(exchange, "Username already in use", 401);
+                                return;
+                            }
+
+                            if(!validateAccessRate(username)) {
+                                respondWithError(exchange, "Exceed of rate limit", 401);
+                                return;
+                            }
+
                             String password = requestData.getString("password");
 
                             // Call the AccountManager's createAccount method
@@ -399,6 +513,10 @@ public class AccountSystem {
                     String authToken = extractAuthTokenFromRequest(exchange);
                     AuthenticationToken token = AuthenticationToken.getAuthenticationToken(authToken);
                     assert token != null;
+                    if(!checkExpirationAuthToken(token.getTokenValue())) {
+                        respondWithError(exchange, "Token invalid", 401);
+                        return;
+                    }
                     if (token.getUsername().equalsIgnoreCase(actionData.optString("username", ""))) {
                         String usernameToDelete = actionData.optString("username", "");
                         boolean deletionResult = deleteAccount(usernameToDelete);
@@ -413,10 +531,24 @@ public class AccountSystem {
                     String authToken2 = extractAuthTokenFromRequest(exchange);
                     AuthenticationToken token2 = AuthenticationToken.getAuthenticationToken(authToken2);
                     assert token2 != null;
+                    if(!checkExpirationAuthToken(token2.getTokenValue())) {
+                        respondWithError(exchange, "Token invalid", 401);
+                        return;
+                    }
                     if (token2.getUsername().equalsIgnoreCase(actionData.optString("username", ""))) {
                         String usernameToUpdate = actionData.optString("username", "");
+
+                        if(!validateAccessRate(usernameToUpdate)) {
+                            respondWithError(exchange, "Exceed of rate limit", 401);
+                            return;
+                        }
+
                         String dataKey = actionData.optString("dataKey", "");
                         JSONObject modifiedData = actionData.optJSONObject("modifiedData");
+                        if(!validateJsonSize(modifiedData.toString())) {
+                            respondWithError(exchange, "JSON data too large", 401);
+                            return;
+                        }
                         boolean modificationResult = modifyUserData(usernameToUpdate, dataKey, modifiedData);
                         responseJson.put("success", modificationResult);
                     } else {
@@ -428,11 +560,22 @@ public class AccountSystem {
                     String authToken3 = extractAuthTokenFromRequest(exchange);
                     AuthenticationToken token3 = AuthenticationToken.getAuthenticationToken(authToken3);
                     assert token3 != null;
+                    if(!checkExpirationAuthToken(token3.getTokenValue())) {
+                        respondWithError(exchange, "Token invalid", 401);
+                        return;
+                    }
                     if (token3.getUsername().equalsIgnoreCase(actionData.optString("username", ""))) {
                         String usernameToRetrieve = actionData.optString("username", "");
+
+                        if(!validateAccessRate(usernameToRetrieve)) {
+                            respondWithError(exchange, "Exceed of rate limit", 401);
+                            return;
+                        }
+
                         String dataKey = actionData.optString("dataKey", "*");
                         JSONObject userData = accountManager.getUserData(usernameToRetrieve, dataKey);
                         responseJson.put("userData", userData);
+                        responseJson.put("uuid", accountManager.getAccount(usernameToRetrieve).getUuid());
                     } else {
                         respondWithError(exchange, "Unauthorized action", 401);
                         return;
@@ -442,8 +585,18 @@ public class AccountSystem {
                     String authToken5 = extractAuthTokenFromRequest(exchange);
                     AuthenticationToken token5 = AuthenticationToken.getAuthenticationToken(authToken5);
                     assert token5 != null;
+                    if(!checkExpirationAuthToken(token5.getTokenValue())) {
+                        respondWithError(exchange, "Token invalid", 401);
+                        return;
+                    }
                     if (token5.getUsername().equalsIgnoreCase(actionData.optString("username", ""))) {
                         String usernameToUpdate = actionData.optString("username", "");
+
+                        if(!validateAccessRate(usernameToUpdate)) {
+                            respondWithError(exchange, "Exceed of rate limit", 401);
+                            return;
+                        }
+
                         String newPassword = actionData.optString("newPassword", "");
                         boolean passwordChangeResult = accountManager.updatePassword(usernameToUpdate, newPassword);
                         responseJson.put("success", passwordChangeResult);
@@ -457,9 +610,30 @@ public class AccountSystem {
                     String authToken4 = extractAuthTokenFromRequest(exchange);
                     AuthenticationToken token4 = AuthenticationToken.getAuthenticationToken(authToken4);
                     assert token4 != null;
+                    if(!checkExpirationAuthToken(token4.getTokenValue())) {
+                        respondWithError(exchange, "Token invalid", 401);
+                        return;
+                    }
                     if (token4.getUsername().equalsIgnoreCase(actionData.optString("username", ""))) {
                         String usernameToUpdate = actionData.optString("username", "");
+
+                        if(!validateAccessRate(usernameToUpdate)) {
+                            respondWithError(exchange, "Exceed of rate limit", 401);
+                            return;
+                        }
+
                         String newUsername = actionData.optString("newUsername", "");
+
+                        if(accountManager.getAccount(newUsername) != null) {
+                            respondWithError(exchange, "Username already in use", 401);
+                            return;
+                        }
+
+                        if(!validateAccessRate(newUsername)) {
+                            respondWithError(exchange, "Exceed of rate limit", 401);
+                            return;
+                        }
+
                         boolean usernameChangeResult = accountManager.changeUsername(usernameToUpdate, newUsername);
                         responseJson.put("success", usernameChangeResult);
                     } else {
@@ -489,7 +663,13 @@ public class AccountSystem {
             try {
                 // Check if the application token is an admin token
                 Token token = Token.getApplicationToken(applicationToken);
-                if (token != null && token.isAdminToken()) {
+
+                if(accountManager.getAccount(token.getUsername()) == null) {
+                    token.deleteToken();
+                    respondWithError(exchange, "Token invalid", 401);
+                }
+
+                if (token.isAdminToken()) {
                     // Token is an admin token, proceed to fetch user information
 
                     // Extract the username of the user whose information is requested
