@@ -1,5 +1,6 @@
 package com.zyneonstudios.accounts;
 
+import co.plocki.json.JSONFile;
 import co.plocki.neoguard.client.NeoGuardClient;
 import com.zyneonstudios.accounts.account.Account;
 import com.zyneonstudios.accounts.manager.AccountManager;
@@ -29,8 +30,9 @@ public class AccountSystem {
 
     private static final ConcurrentHashMap<String, AtomicLong> accessCounts = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, Integer> accesses = new ConcurrentHashMap<>();
-    private static final int MAX_ACCESS_PER_MINUTE = 100;
-    private static final int MAX_JSON_SIZE_BYTES = 1024;
+    private static int MAX_ACCESS_PER_MINUTE = 100;
+    private static int MAX_JSON_SIZE_BYTES = 1024;
+    private static int TOKEN_RANDOM_BYTE_SIZE = 256;
 
     private void setTimeStamp(String username) {
         if(!accessCounts.containsKey(username)) {
@@ -74,9 +76,24 @@ public class AccountSystem {
         NeoGuardClient client = new NeoGuardClient();
         client.start();
 
+        JSONFile file = new JSONFile("zyneon_config.json");
+        if(file.isNew()) {
+            file.put("port", 908);
+            file.put("host_IPv4", "0.0.0.0");
+            file.put("host_IPv4", "::");
+            file.put("max_access_per_minute", 100);
+            file.put("json_data_max_bytes", 1024);
+            file.put("token_random_byte_size", 256);
+            file.save();
+        }
+
+        MAX_ACCESS_PER_MINUTE = file.getInt("max_access_per_minute");
+        MAX_JSON_SIZE_BYTES = file.getInt("json_data_max_bytes");
+        TOKEN_RANDOM_BYTE_SIZE = file.getInt("token_random_byte_size");
+
         if (undertow == null) {
             undertow = Undertow.builder()
-                    .addHttpListener(908, "0.0.0.0", new RoutingHandler()
+                    .addHttpListener(file.getInt("port"), file.getString("host_IPv4"), new RoutingHandler()
                             .post("/login", this::loginHandler)
                             .post("/logout", this::logoutHandler)
                             .post("/refresh", this::refreshTokenHandler)
@@ -84,7 +101,7 @@ public class AccountSystem {
                             .get("/account", this::accountHandler)
                             .get("/information", this::getAllInformationHandler))
 
-                    .addHttpListener(908, "::", new RoutingHandler()
+                    .addHttpListener(file.getInt("port"), file.getString("host_IPv6"), new RoutingHandler()
                             .post("/login", this::loginHandler)
                             .post("/logout", this::logoutHandler)
                             .post("/refresh", this::refreshTokenHandler)
@@ -124,7 +141,7 @@ public class AccountSystem {
     private static final Base64.Encoder base64Encoder = Base64.getUrlEncoder(); //threadsafe
 
     public static String generateNewToken() {
-        byte[] randomBytes = new byte[256];
+        byte[] randomBytes = new byte[TOKEN_RANDOM_BYTE_SIZE];
         secureRandom.nextBytes(randomBytes);
         return base64Encoder.encodeToString(randomBytes);
     }
