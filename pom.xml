@@ -6,7 +6,7 @@
 
     <groupId>com.zyneonstudios</groupId>
     <artifactId>ZyneonAccounts</artifactId>
-    <version>1.1-SNAPSHOT</version>
+    <version>Alpine-v1.1</version>
 
     <properties>
         <maven.compiler.source>20</maven.compiler.source>
