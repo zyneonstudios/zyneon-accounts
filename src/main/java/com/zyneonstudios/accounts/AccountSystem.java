@@ -81,7 +81,7 @@ public class AccountSystem {
         if(file.isNew()) {
             file.put("port", 908);
             file.put("host_IPv4", "0.0.0.0");
-            file.put("host_IPv6", "::");
+            //file.put("host_IPv6", "::");
             file.put("max_access_per_minute", 100);
             file.put("json_data_max_bytes", 1024);
             file.put("token_random_byte_size", 256);
@@ -100,15 +100,13 @@ public class AccountSystem {
                             .post("/refresh", this::refreshTokenHandler)
                             .get("/api/application", this::applicationApiHandler)
                             .get("/account", this::accountHandler)
-                            .get("/information", this::getAllInformationHandler))
-
-                    .addHttpListener(file.getInt("port"), file.getString("host_IPv6"), new RoutingHandler()
-                            .post("/login", this::loginHandler)
-                            .post("/logout", this::logoutHandler)
-                            .post("/refresh", this::refreshTokenHandler)
-                            .get("/api/application", this::applicationApiHandler)
-                            .get("/account", this::accountHandler)
-                            .get("/information", this::getAllInformationHandler)).build();
+                            .get("/information", this::getAllInformationHandler)
+                            .get("/", httpServerExchange -> {
+                                String response = "<meta http-equiv=\"Refresh\" content=\"0; url='https://github.com/officialPlocki/ZyneonAccounts'\" />Zyneon Account Management powered by NeoGuard. Redirecting to GitHub...";
+                                httpServerExchange.setResponseContentLength(response.getBytes(StandardCharsets.UTF_8).length);
+                                httpServerExchange.getResponseSender().send(response);
+                                httpServerExchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/html");
+                            })).build();
         }
 
         Thread thread = new Thread(() -> {

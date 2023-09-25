@@ -117,7 +117,7 @@ public class JSONFile {
         object.remove("mapperVersion");
         object.put("mapperVersion", mapperVersion);
         PrintWriter writer = new PrintWriter(file);
-        writer.println(object.toString());
+        writer.println(new BeautifulJson().beautiful(object.toString()));
         writer.flush();
         writer.close();
     }
