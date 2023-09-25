@@ -5,13 +5,11 @@ import co.plocki.neoguard.client.interfaces.NeoThread;
 import co.plocki.neoguard.client.post.NeoPost;
 import co.plocki.neoguard.client.request.NeoRequest;
 import co.plocki.neoguard.client.request.NeoResponse;
-import com.zyneonstudios.accounts.AccountSystem;
 import org.json.JSONObject;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
-import java.util.UUID;
 
 public class AuthenticationToken {
 
@@ -23,6 +21,13 @@ public class AuthenticationToken {
     public AuthenticationToken(String username, String tokenValue, boolean isTemporary) {
         this.username = username;
         this.creationTimestamp = System.currentTimeMillis();
+        this.tokenValue = new String(Base64.getEncoder().encode(tokenValue.getBytes(StandardCharsets.UTF_8)));
+        this.isTemporary = isTemporary;
+    }
+
+    public AuthenticationToken(String username, String tokenValue, long creationTimestamp, boolean isTemporary) {
+        this.username = username;
+        this.creationTimestamp = creationTimestamp;
         this.tokenValue = new String(Base64.getEncoder().encode(tokenValue.getBytes(StandardCharsets.UTF_8)));
         this.isTemporary = isTemporary;
     }
@@ -80,7 +85,7 @@ public class AuthenticationToken {
         long creationTimestamp = jsonObject.getLong("creationTimestamp");
         String tokenValue = jsonObject.getString("tokenValue");
         boolean isTemporary = jsonObject.getBoolean("isTemporary");
-        return new AuthenticationToken(username, tokenValue, isTemporary);
+        return new AuthenticationToken(username, tokenValue, creationTimestamp, isTemporary);
     }
 
     public static AuthenticationToken getAuthenticationToken(String token) {

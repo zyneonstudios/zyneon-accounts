@@ -23,6 +23,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Objects;
+import java.util.Scanner;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -34,6 +35,8 @@ public class AccountSystem {
     private static int MAX_ACCESS_PER_MINUTE = 100;
     private static int MAX_JSON_SIZE_BYTES = 1024;
     private static int TOKEN_RANDOM_BYTE_SIZE = 256;
+
+    private static int MAX_JSON_OBJECTS = 6;
 
     private void setTimeStamp(String username) {
         if(!accessCounts.containsKey(username)) {
@@ -53,7 +56,12 @@ public class AccountSystem {
         return true;
     }
 
-    private boolean validateJsonSize(String jsonString) {
+    private boolean validateJsonSize(String jsonString, String username) throws Exception {
+
+        if(accountManager.getUserData(username, "*").keySet().size() >= MAX_JSON_OBJECTS) {
+            return false;
+        }
+
         int jsonSizeBytes = jsonString.getBytes(StandardCharsets.UTF_8).length;
 
         return jsonSizeBytes <= MAX_JSON_SIZE_BYTES;
@@ -66,6 +74,30 @@ public class AccountSystem {
         accountSystem.start();
 
         Runtime.getRuntime().addShutdownHook(new Thread(accountSystem::stop));
+
+        Scanner scanner = new Scanner(System.in);
+
+        System.out.println("Command list:");
+        System.out.println("createAdminAppToken username");
+        System.out.println("createAppToken username");
+        System.out.println("stop");
+
+        while (true) {
+            if (scanner.hasNextLine()) {
+                String userInput = scanner.nextLine();
+                if(userInput.equalsIgnoreCase("createAdminAppToken")) {
+                    System.err.println("Here is your access token:\n\n" + new Token(userInput.split(" ")[1], generateNewToken(), true));
+                } else if(userInput.toLowerCase().startsWith("createAppToken")) {
+                    System.err.println("Here is your access token:\n\n" + new Token(userInput.split(" ")[1], generateNewToken(), false));
+                } else if(userInput.equalsIgnoreCase("stop")) {
+                    System.err.println("Stopping...");
+                    accountSystem.stop();
+                    System.exit(0);
+                } else {
+                    System.err.println("Unknown command.");
+                }
+            }
+        }
     }
 
     private Undertow undertow;
@@ -78,19 +110,20 @@ public class AccountSystem {
         client.start();
 
         JSONFile file = new JSONFile("config" + File.separator + "zyneon_config.json");
-        if(file.isNew()) {
-            file.put("port", 908);
-            file.put("host_IPv4", "0.0.0.0");
-            //file.put("host_IPv6", "::");
-            file.put("max_access_per_minute", 100);
-            file.put("json_data_max_bytes", 1024);
-            file.put("token_random_byte_size", 256);
-            file.save();
-        }
+
+        file.putDefaultObject("port", 908);
+        file.putDefaultObject("host_IPv4", "0.0.0.0");
+        //file.put("host_IPv6", "::");
+        file.putDefaultObject("max_access_per_minute", 100);
+        file.putDefaultObject("json_data_max_bytes", 1024);
+        file.putDefaultObject("token_random_byte_size", 256);
+        file.putDefaultObject("json_data_max_objects", 6);
+        file.save();
 
         MAX_ACCESS_PER_MINUTE = file.getInt("max_access_per_minute");
         MAX_JSON_SIZE_BYTES = file.getInt("json_data_max_bytes");
         TOKEN_RANDOM_BYTE_SIZE = file.getInt("token_random_byte_size");
+        MAX_JSON_OBJECTS = file.getInt("json_data_max_objects");
 
         if (undertow == null) {
             undertow = Undertow.builder()
@@ -561,7 +594,7 @@ public class AccountSystem {
 
                         String dataKey = actionData.optString("dataKey", "");
                         JSONObject modifiedData = actionData.optJSONObject("modifiedData");
-                        if(!validateJsonSize(modifiedData.toString())) {
+                        if(!validateJsonSize(modifiedData.toString(), usernameToUpdate)) {
                             respondWithError(exchange, "JSON data too large", 401);
                             return;
                         }

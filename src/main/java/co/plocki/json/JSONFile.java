@@ -187,6 +187,18 @@ public class JSONFile {
     }
 
     /**
+     * This function puts a key and value into the object.
+     *
+     * @param key The key to store the value under.
+     * @param value The value to be stored in the map.
+     */
+    public void putDefaultObject(String key, Object value) {
+        if(!object.has(key)) {
+            object.put(key, value);
+        }
+    }
+
+    /**
      * Get the value of the key as a JSONObject.
      *
      * @param key The key of the JSONObject to get.

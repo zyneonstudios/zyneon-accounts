@@ -8,8 +8,10 @@ import co.plocki.neoguard.client.request.NeoResponse;
 import com.zyneonstudios.accounts.account.Account;
 import org.json.JSONObject;
 
-import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
 
 public class AccountManager {
 

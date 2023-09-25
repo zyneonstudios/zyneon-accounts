@@ -2,10 +2,10 @@ package com.zyneonstudios.accounts.account;
 
 public class Account {
 
-    private String username;
-    private String password;
-    private long creation_timestamp;
-    private String uuid;
+    private final String username;
+    private final String password;
+    private final long creation_timestamp;
+    private final String uuid;
 
     public Account(String username, String password, long creation_timestamp, String uuid) {
         this.username = username;
