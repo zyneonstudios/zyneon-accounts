@@ -70,10 +70,48 @@ public class AccountSystem {
     private static final Logger logger = LogManager.getLogger(AccountSystem.class);
 
     public static void main(String[] args) throws IOException, NoSuchAlgorithmException, KeyManagementException {
+
+        System.out.println("           88             88                         \n" +
+                "           88             \"\"                         \n" +
+                "           88                                        \n" +
+                ",adPPYYba, 88 8b,dPPYba,  88 8b,dPPYba,   ,adPPYba,  \n" +
+                "\"\"     `Y8 88 88P'    \"8a 88 88P'   `\"8a a8P_____88  \n" +
+                ",adPPPPP88 88 88       d8 88 88       88 8PP\"\"\"\"\"\"\"  \n" +
+                "88,    ,88 88 88b,   ,a8\" 88 88       88 \"8b,   ,aa  \n" +
+                "`\"8bbdP\"Y8 88 88`YbbdP\"'  88 88       88  `\"Ybbd8\"'  \n" +
+                "              88                                     \n" +
+                "              88                                     ");
+        System.err.println("Release v1.1 (beta)");
+        System.err.println("ZyneonAccounts powered by NeoGuard");
+
+        System.out.println("\nLoading...\n");
+
+        Thread thread = new Thread(() -> {
+            String[] cuteLoadingFrames = {
+                    "  ( •_•)",
+                    "  ( •_•)>⌐■-■",
+                    "  (⌐■_■)"
+            };
+
+            for (int i = 0; i < 10; i++) {
+                System.out.print("\r" + cuteLoadingFrames[i % cuteLoadingFrames.length]);
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException ignored) {}
+            }
+        });
+        thread.start();
+
         AccountSystem accountSystem = new AccountSystem();
         accountSystem.start();
 
         Runtime.getRuntime().addShutdownHook(new Thread(accountSystem::stop));
+
+        if(thread.isAlive()) {
+            thread.interrupt();
+        }
+
+        System.out.println("\nLoaded!\n");
 
         Scanner scanner = new Scanner(System.in);
 
@@ -85,10 +123,18 @@ public class AccountSystem {
         while (true) {
             if (scanner.hasNextLine()) {
                 String userInput = scanner.nextLine();
-                if(userInput.equalsIgnoreCase("createAdminAppToken")) {
-                    System.err.println("Here is your access token:\n\n" + new Token(userInput.split(" ")[1], generateNewToken(), true));
-                } else if(userInput.toLowerCase().startsWith("createAppToken")) {
-                    System.err.println("Here is your access token:\n\n" + new Token(userInput.split(" ")[1], generateNewToken(), false));
+                if(userInput.toLowerCase().startsWith("createadminapptoken")) {
+                    try {
+                        System.err.println("Here is your access token:\n\n" + new Token(userInput.split(" ")[1], generateNewToken(), true).saveToken());
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                } else if(userInput.toLowerCase().startsWith("createapptoken")) {
+                    try {
+                        System.err.println("Here is your access token:\n\n" + new Token(userInput.split(" ")[1], generateNewToken(), false).saveToken());
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
                 } else if(userInput.equalsIgnoreCase("stop")) {
                     System.err.println("Stopping...");
                     accountSystem.stop();

@@ -45,7 +45,7 @@ public class Token {
     }
 
     // Save the token to the Neo database
-    public void saveToken() throws Exception {
+    public Token saveToken() throws Exception {
         NeoThread thread = new NeoThread("tokens");
         NeoArray tokenArray = new NeoArray(tokenValue);
 
@@ -57,6 +57,8 @@ public class Token {
 
         NeoPost create = new NeoPost(thread, List.of(tokenArray), List.of(obj));
         create.post();
+
+        return this;
     }
 
     // Delete the token from the Neo database
