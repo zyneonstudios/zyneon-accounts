@@ -88,9 +88,12 @@ public class AccountSystem {
 
         Thread thread = new Thread(() -> {
             String[] cuteLoadingFrames = {
-                    "  ( •_•)",
-                    "  ( •_•)>⌐■-■",
-                    "  (⌐■_■)"
+                    "  O.O",
+                    "  OO.",
+                    "  .OO",
+                    "  ->>",
+                    "  <<-",
+                    "  <->"
             };
 
             for (int i = 0; i < 10; i++) {
@@ -100,7 +103,7 @@ public class AccountSystem {
                 } catch (InterruptedException ignored) {}
             }
 
-            System.out.println("\nLoaded!\n");
+            System.out.println("\n\nLoaded!\n");
 
             System.out.println("Command list:");
             System.out.println("createAdminAppToken username");
