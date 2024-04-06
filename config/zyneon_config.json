@@ -2,7 +2,9 @@
   "json_data_max_bytes":1024,
   "port":908,
   "host_IPv4":"0.0.0.0",
+  "json_data_max_objects":6,
   "max_access_per_minute":100,
   "token_random_byte_size":256,
-  "mapperVersion":"1.0"
+  "mapperVersion":"1.0",
+  "debug_enabled":false
 }

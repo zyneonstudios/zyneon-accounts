@@ -190,7 +190,7 @@ public class AccountSystem {
                             .get("/account", this::accountHandler)
                             .get("/information", this::getAllInformationHandler)
                             .get("/", httpServerExchange -> {
-                                String response = "<meta http-equiv=\"Refresh\" content=\"0; url='https://github.com/officialPlocki/ZyneonAccounts'\" />Zyneon Account Management powered by NeoGuard. Redirecting to GitHub...";
+                                String response = "<meta http-equiv=\"Refresh\" content=\"0; url='https://zyneonstudios.com'\" />Zyneon Account Management - Redirecting to ZyneonStudios...";
                                 httpServerExchange.setResponseContentLength(response.getBytes(StandardCharsets.UTF_8).length);
                                 httpServerExchange.getResponseSender().send(response);
                                 httpServerExchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/html");

@@ -70,7 +70,7 @@ public class AccountManager {
 
     public boolean changeUsername(String oldUsername, String newUsername) throws SQLException {
         try (Connection connection = AccountSystem.getDriver().getHikariDataSource().getConnection()) {
-            String updateSql = "UPDATE accounts SET username = ? WHERE username = ?";
+            String updateSql = "UPDATE accounts SET username = ?, password = password WHERE username = ?";
             try (PreparedStatement updateStatement = connection.prepareStatement(updateSql)) {
                 updateStatement.setString(1, newUsername);
                 updateStatement.setString(2, oldUsername);
