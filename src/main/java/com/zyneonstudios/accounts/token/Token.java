@@ -1,16 +1,11 @@
 package com.zyneonstudios.accounts.token;
 
-import co.plocki.neoguard.client.interfaces.NeoArray;
-import co.plocki.neoguard.client.interfaces.NeoThread;
-import co.plocki.neoguard.client.post.NeoPost;
-import co.plocki.neoguard.client.request.NeoRequest;
-import co.plocki.neoguard.client.request.NeoResponse;
+import com.zyneonstudios.accounts.AccountSystem;
 import org.json.JSONObject;
-
-import java.util.Base64;
-import java.util.List;
-import java.nio.charset.StandardCharsets;
-import java.util.UUID;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 
 public class Token {
 
@@ -44,29 +39,30 @@ public class Token {
         return isAdminToken;
     }
 
-    // Save the token to the Neo database
-    public Token saveToken() throws Exception {
-        NeoThread thread = new NeoThread("tokens");
-        NeoArray tokenArray = new NeoArray(tokenValue);
-
-        JSONObject obj = new JSONObject();
-        obj.put("tokenValue", this.tokenValue);
-        obj.put("username", this.username);
-        obj.put("creationTimestamp", this.creationTimestamp);
-        obj.put("isAdminToken", this.isAdminToken);
-
-        NeoPost create = new NeoPost(thread, List.of(tokenArray), List.of(obj));
-        create.post();
-
-        return this;
+    // Save the token to the database
+    public String saveToken() throws SQLException {
+        try (Connection connection = AccountSystem.getDriver().getHikariDataSource().getConnection()) {
+            String sql = "INSERT INTO tokens (tokenValue, username, creationTimestamp, isAdminToken) VALUES (?, ?, ?, ?)";
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setString(1, this.tokenValue);
+                statement.setString(2, this.username);
+                statement.setLong(3, this.creationTimestamp);
+                statement.setBoolean(4, this.isAdminToken);
+                statement.executeUpdate();
+            }
+        }
+        return tokenValue;
     }
 
-    // Delete the token from the Neo database
-    public void deleteToken() throws Exception {
-        NeoThread thread = new NeoThread("tokens");
-        NeoArray tokenArray = new NeoArray(tokenValue);
-
-        tokenArray.deleteArray(thread.getName(), tokenValue);
+    // Delete the token from the database
+    public void deleteToken() throws SQLException {
+        try (Connection connection = AccountSystem.getDriver().getHikariDataSource().getConnection()) {
+            String sql = "DELETE FROM tokens WHERE tokenValue = ?";
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setString(1, this.tokenValue);
+                statement.executeUpdate();
+            }
+        }
     }
 
     // Additional methods for Token class
@@ -87,28 +83,22 @@ public class Token {
         return new Token(username, tokenValue, isAdminToken);
     }
 
-    public static Token getApplicationToken(String tokenValue) {
-        try {
-            // Retrieve the token from the "tokens" thread in the Neo database
-            NeoThread thread = new NeoThread("tokens");
-            NeoArray tokenArray = new NeoArray(tokenValue);
-
-            NeoRequest request = new NeoRequest(thread, List.of(tokenArray));
-            NeoResponse response = request.request();
-
-            List<Object> objects = response.getArrayObjects(tokenArray);
-
-            if (!objects.isEmpty()) {
-                JSONObject jsonObject = (JSONObject) objects.get(0);
-                // Deserialize the JSON object into a Token
-                return Token.fromJSONObject(jsonObject);
+    public static Token getApplicationToken(String tokenValue) throws SQLException {
+        try (Connection connection = AccountSystem.getDriver().getHikariDataSource().getConnection()) {
+            String sql = "SELECT * FROM tokens WHERE tokenValue = ?";
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setString(1, tokenValue);
+                try (ResultSet resultSet = statement.executeQuery()) {
+                    if (resultSet.next()) {
+                        String username = resultSet.getString("username");
+                        long creationTimestamp = resultSet.getLong("creationTimestamp");
+                        boolean isAdminToken = resultSet.getBoolean("isAdminToken");
+                        return new Token(username, tokenValue, isAdminToken);
+                    }
+                }
             }
-        } catch (Exception e) {
-            // Handle exceptions appropriately (e.g., log the error)
-            e.printStackTrace();
         }
-
-        return null;  // Return null if token not found or an error occurred
+        return null;
     }
 
     // Other methods and functionalities specific to Token can be added here

@@ -1,7 +1,7 @@
 package com.zyneonstudios.accounts;
 
 import co.plocki.json.JSONFile;
-import co.plocki.neoguard.client.NeoGuardClient;
+import co.plocki.mysql.MySQLDriver;
 import com.zyneonstudios.accounts.account.Account;
 import com.zyneonstudios.accounts.manager.AccountManager;
 import com.zyneonstudios.accounts.token.AuthenticationToken;
@@ -73,7 +73,8 @@ public class AccountSystem {
 
     public static void main(String[] args) throws IOException, NoSuchAlgorithmException, KeyManagementException {
 
-        System.out.println("           88             88                         \n" +
+        System.out.println(
+                "           88             88                         \n" +
                 "           88             \"\"                         \n" +
                 "           88                                        \n" +
                 ",adPPYYba, 88 8b,dPPYba,  88 8b,dPPYba,   ,adPPYba,  \n" +
@@ -151,11 +152,15 @@ public class AccountSystem {
     private Undertow undertow;
 
     private static final AccountManager accountManager = new AccountManager();
+    private static MySQLDriver driver;
+
+    public static MySQLDriver getDriver() {
+        return driver;
+    }
 
     public void start() throws IOException, NoSuchAlgorithmException, KeyManagementException {
         // Initialize NeoGuardClient and set up Undertow routes
-        NeoGuardClient client = new NeoGuardClient();
-        client.start();
+        driver = new MySQLDriver();
 
         JSONFile file = new JSONFile("config" + File.separator + "zyneon_config.json");
 

@@ -1,18 +1,14 @@
 package com.zyneonstudios.accounts.token;
 
-import co.plocki.neoguard.client.interfaces.NeoArray;
-import co.plocki.neoguard.client.interfaces.NeoThread;
-import co.plocki.neoguard.client.post.NeoPost;
-import co.plocki.neoguard.client.request.NeoRequest;
-import co.plocki.neoguard.client.request.NeoResponse;
+import com.zyneonstudios.accounts.AccountSystem;
 import org.json.JSONObject;
-
-import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.Base64;
-import java.util.List;
 
 public class AuthenticationToken {
-
     private String username;
     private long creationTimestamp;
     private String tokenValue;
@@ -21,14 +17,14 @@ public class AuthenticationToken {
     public AuthenticationToken(String username, String tokenValue, boolean isTemporary) {
         this.username = username;
         this.creationTimestamp = System.currentTimeMillis();
-        this.tokenValue = new String(Base64.getEncoder().encode(tokenValue.getBytes(StandardCharsets.UTF_8)));
+        this.tokenValue = new String(Base64.getEncoder().encode(tokenValue.getBytes()));
         this.isTemporary = isTemporary;
     }
 
     public AuthenticationToken(String username, String tokenValue, long creationTimestamp, boolean isTemporary) {
         this.username = username;
         this.creationTimestamp = creationTimestamp;
-        this.tokenValue = new String(Base64.getEncoder().encode(tokenValue.getBytes(StandardCharsets.UTF_8)));
+        this.tokenValue = new String(Base64.getEncoder().encode(tokenValue.getBytes()));
         this.isTemporary = isTemporary;
     }
 
@@ -50,25 +46,27 @@ public class AuthenticationToken {
         return isTemporary;
     }
 
-    public void saveToken() throws Exception {
-        NeoThread thread = new NeoThread("auth_tokens");
-        NeoArray tokenArray = new NeoArray(tokenValue);
-
-        JSONObject obj = new JSONObject();
-        obj.put("username", this.username);
-        obj.put("creationTimestamp", this.creationTimestamp);
-        obj.put("tokenValue", this.tokenValue);
-        obj.put("isTemporary", this.isTemporary);
-
-        NeoPost create = new NeoPost(thread, List.of(tokenArray), List.of(obj));
-        create.post();
+    public void saveToken() throws SQLException {
+        try (Connection connection = AccountSystem.getDriver().getHikariDataSource().getConnection()) {
+            String sql = "INSERT INTO auth_tokens (username, creationTimestamp, tokenValue, isTemporary) VALUES (?, ?, ?, ?)";
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setString(1, this.username);
+                statement.setLong(2, this.creationTimestamp);
+                statement.setString(3, this.tokenValue);
+                statement.setBoolean(4, this.isTemporary);
+                statement.executeUpdate();
+            }
+        }
     }
 
-    public void deleteToken() throws Exception {
-        NeoThread thread = new NeoThread("auth_tokens");
-        NeoArray tokenArray = new NeoArray(tokenValue);
-
-        tokenArray.deleteArray(thread.getName(), tokenValue);
+    public void deleteToken() throws SQLException {
+        try (Connection connection = AccountSystem.getDriver().getHikariDataSource().getConnection()) {
+            String sql = "DELETE FROM auth_tokens WHERE tokenValue = ?";
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setString(1, this.tokenValue);
+                statement.executeUpdate();
+            }
+        }
     }
 
     public JSONObject toJSONObject() {
@@ -88,27 +86,22 @@ public class AuthenticationToken {
         return new AuthenticationToken(username, tokenValue, creationTimestamp, isTemporary);
     }
 
-    public static AuthenticationToken getAuthenticationToken(String token) {
-        try {
-            // Retrieve the authentication token from the "auth_tokens" thread in the Neo database
-            NeoThread thread = new NeoThread("auth_tokens");
-            NeoArray tokenArray = new NeoArray(token);
-
-            NeoRequest request = new NeoRequest(thread, List.of(tokenArray));
-            NeoResponse response = request.request();
-
-            List<Object> objects = response.getArrayObjects(tokenArray);
-
-            if (!objects.isEmpty()) {
-                JSONObject jsonObject = (JSONObject) objects.get(0);
-                // Deserialize the JSON object into an AuthenticationToken
-                return AuthenticationToken.fromJSONObject(jsonObject);
+    public static AuthenticationToken getAuthenticationToken(String token) throws SQLException {
+        try (Connection connection = AccountSystem.getDriver().getHikariDataSource().getConnection()) {
+            String sql = "SELECT * FROM auth_tokens WHERE tokenValue = ?";
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setString(1, token);
+                try (ResultSet resultSet = statement.executeQuery()) {
+                    if (resultSet.next()) {
+                        String username = resultSet.getString("username");
+                        long creationTimestamp = resultSet.getLong("creationTimestamp");
+                        String tokenValue = resultSet.getString("tokenValue");
+                        boolean isTemporary = resultSet.getBoolean("isTemporary");
+                        return new AuthenticationToken(username, tokenValue, creationTimestamp, isTemporary);
+                    }
+                }
             }
-        } catch (Exception e) {
-            // Handle exceptions appropriately (e.g., log the error)
-            e.printStackTrace();
         }
-
-        return null;  // Return null if token not found or an error occurred
+        return null;
     }
 }
