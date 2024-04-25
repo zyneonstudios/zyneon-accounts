@@ -63,6 +63,7 @@ public class MySQLDriver {
         config.addDataSourceProperty("cachePrepStmts", file.get("options").getString("cachePrepStmts"));
         config.addDataSourceProperty("prepStmtCacheSize", file.get("options").getString("prepStmtCacheSize"));
         config.addDataSourceProperty("prepStmtCacheSqlLimit", file.get("options").getString("prepStmtCacheSqlLimit"));
+        config.setDriverClassName("com.mysql.cj.jdbc.Driver");
 
         asyncSource = new HikariDataSource(config);
     }

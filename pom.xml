@@ -5,8 +5,8 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.zyneonstudios</groupId>
-    <artifactId>ZyneonAccounts</artifactId>
-    <version>Alpine-v1.1</version>
+    <artifactId>zyneonaccounts</artifactId>
+    <version>alpine-v1.1</version>
 
     <properties>
         <maven.compiler.source>20</maven.compiler.source>
@@ -66,7 +66,7 @@
     <distributionManagement>
         <repository>
             <id>github</id>
-            <url>https://maven.pkg.github.com/officialPlocki/ZyneonAccounts</url>
+            <url>https://maven.pkg.github.com/zyneonstudios/zyneon-accounts</url>
         </repository>
     </distributionManagement>
 
@@ -75,6 +75,12 @@
             <groupId>com.zaxxer</groupId>
             <artifactId>HikariCP</artifactId>
             <version>4.0.3</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <version>8.3.0</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
